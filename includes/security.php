@@ -26,6 +26,13 @@ function generate_csrf_token() {
         return null;
     }
 
+    // If token already exists in session and not expired, reuse it
+    if (isset($_SESSION['csrf_token']) && isset($_SESSION['csrf_token_time'])) {
+        if (time() - $_SESSION['csrf_token_time'] < 3600) {
+            return $_SESSION['csrf_token'];
+        }
+    }
+
     // Generate random token
     $token = bin2hex(random_bytes(32));
     $user_id = $_SESSION['user_id'];
@@ -35,8 +42,9 @@ function generate_csrf_token() {
     $stmt = $pdo->prepare("INSERT INTO csrf_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
     $stmt->execute([$user_id, $token, $expires_at]);
 
-    // Also store in session
+    // Store in session
     $_SESSION['csrf_token'] = $token;
+    $_SESSION['csrf_token_time'] = time();
 
     return $token;
 }
@@ -236,8 +244,8 @@ function set_security_headers() {
     // HSTS - Force HTTPS
     header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
 
-    // CSP - Content Security Policy
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+    // CSP - Content Security Policy (Allow Google Charts API for QR code)
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://chart.googleapis.com https://api.qrserver.com;");
 
     // X-Frame-Options - Prevent clickjacking
     header("X-Frame-Options: DENY");
