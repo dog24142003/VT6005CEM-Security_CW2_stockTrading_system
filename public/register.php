@@ -112,21 +112,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="form-group">
                         <label for="password">Password:</label>
-                        <input type="password"
-                               id="password"
-                               name="password"
-                               required
-                               pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}"
-                               title="At least 8 characters with uppercase, lowercase, number and special character">
+                        <div style="position: relative;">
+                            <input type="password"
+                                   id="password"
+                                   name="password"
+                                   required
+                                   pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}"
+                                   title="At least 8 characters with uppercase, lowercase, number and special character"
+                                   style="padding-right: 45px;">
+                            <button type="button"
+                                    id="toggle-password"
+                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                                           background: none; border: none; cursor: pointer; font-size: 20px;
+                                           color: #666; padding: 0; width: 30px; height: 30px;">
+                                👁️
+                            </button>
+                        </div>
+
+                        <!-- Password Strength Meter -->
+                        <div id="password-strength-meter" style="margin-top: 8px; display: none;">
+                            <div style="display: flex; gap: 4px; margin-bottom: 5px;">
+                                <div id="strength-bar-1" style="flex: 1; height: 6px; background: #ddd; border-radius: 3px; transition: all 0.3s;"></div>
+                                <div id="strength-bar-2" style="flex: 1; height: 6px; background: #ddd; border-radius: 3px; transition: all 0.3s;"></div>
+                                <div id="strength-bar-3" style="flex: 1; height: 6px; background: #ddd; border-radius: 3px; transition: all 0.3s;"></div>
+                                <div id="strength-bar-4" style="flex: 1; height: 6px; background: #ddd; border-radius: 3px; transition: all 0.3s;"></div>
+                            </div>
+                            <small id="strength-text" style="font-weight: 600;"></small>
+                        </div>
+
                         <small style="color: #666;">Min 8 chars: uppercase, lowercase, number, special char (@$!%*?&)</small>
                     </div>
 
                     <div class="form-group">
                         <label for="confirm_password">Confirm Password:</label>
-                        <input type="password"
-                               id="confirm_password"
-                               name="confirm_password"
-                               required>
+                        <div style="position: relative;">
+                            <input type="password"
+                                   id="confirm_password"
+                                   name="confirm_password"
+                                   required
+                                   style="padding-right: 45px;">
+                            <button type="button"
+                                    id="toggle-confirm-password"
+                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                                           background: none; border: none; cursor: pointer; font-size: 20px;
+                                           color: #666; padding: 0; width: 30px; height: 30px;">
+                                👁️
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-full">Register</button>
@@ -156,10 +188,100 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script>
+        // Toggle Password Visibility
+        const togglePassword = document.getElementById('toggle-password');
+        const passwordInput = document.getElementById('password');
+        const toggleConfirmPassword = document.getElementById('toggle-confirm-password');
+        const confirmPasswordInput = document.getElementById('confirm_password');
+
+        togglePassword.addEventListener('click', function() {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            this.textContent = type === 'password' ? '👁️' : '🙈';
+        });
+
+        toggleConfirmPassword.addEventListener('click', function() {
+            const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            confirmPasswordInput.setAttribute('type', type);
+            this.textContent = type === 'password' ? '👁️' : '🙈';
+        });
+
+        // Password Strength Meter
+        const strengthMeter = document.getElementById('password-strength-meter');
+        const strengthBars = [
+            document.getElementById('strength-bar-1'),
+            document.getElementById('strength-bar-2'),
+            document.getElementById('strength-bar-3'),
+            document.getElementById('strength-bar-4')
+        ];
+        const strengthText = document.getElementById('strength-text');
+
+        passwordInput.addEventListener('input', function() {
+            const password = this.value;
+
+            if (password.length === 0) {
+                strengthMeter.style.display = 'none';
+                return;
+            }
+
+            strengthMeter.style.display = 'block';
+
+            // Calculate password strength
+            let strength = 0;
+            let feedback = [];
+
+            // Length check
+            if (password.length >= 8) strength++;
+            if (password.length >= 12) strength++;
+
+            // Character type checks
+            if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+            if (/\d/.test(password)) strength++;
+            if (/[@$!%*?&]/.test(password)) strength++;
+
+            // Cap at 4
+            strength = Math.min(strength, 4);
+
+            // Reset all bars
+            strengthBars.forEach(bar => {
+                bar.style.background = '#ddd';
+            });
+
+            // Update bars and text based on strength
+            let color, text;
+            if (strength === 1) {
+                color = '#e74c3c'; // Red
+                text = 'Weak';
+                strengthBars[0].style.background = color;
+            } else if (strength === 2) {
+                color = '#f39c12'; // Orange
+                text = 'Fair';
+                strengthBars[0].style.background = color;
+                strengthBars[1].style.background = color;
+            } else if (strength === 3) {
+                color = '#f1c40f'; // Yellow
+                text = 'Good';
+                strengthBars[0].style.background = color;
+                strengthBars[1].style.background = color;
+                strengthBars[2].style.background = color;
+            } else if (strength === 4) {
+                color = '#27ae60'; // Green
+                text = 'Strong';
+                strengthBars.forEach(bar => bar.style.background = color);
+            } else {
+                color = '#95a5a6'; // Gray
+                text = 'Too Short';
+                strengthBars[0].style.background = color;
+            }
+
+            strengthText.textContent = text;
+            strengthText.style.color = color;
+        });
+
         // Client-side password match validation
         document.querySelector('form').addEventListener('submit', function(e) {
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
+            const password = passwordInput.value;
+            const confirmPassword = confirmPasswordInput.value;
 
             if (password !== confirmPassword) {
                 e.preventDefault();

@@ -144,11 +144,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="form-group">
                         <label for="password">Password:</label>
-                        <input type="password"
-                               id="password"
-                               name="password"
-                               required
-                               autocomplete="current-password">
+                        <div style="position: relative;">
+                            <input type="password"
+                                   id="password"
+                                   name="password"
+                                   required
+                                   autocomplete="current-password"
+                                   style="padding-right: 45px;">
+                            <button type="button"
+                                    id="toggle-password"
+                                    style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                                           background: none; border: none; cursor: pointer; font-size: 20px;
+                                           color: #666; padding: 0; width: 30px; height: 30px;"
+                                    title="Show/Hide Password">
+                                👁️
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-full">Login</button>
@@ -173,5 +184,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </footer>
         </div>
     </div>
+
+    <script>
+        // Toggle Password Visibility
+        const togglePassword = document.getElementById('toggle-password');
+        const passwordInput = document.getElementById('password');
+
+        if (togglePassword && passwordInput) {
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                this.textContent = type === 'password' ? '👁️' : '🙈';
+            });
+        }
+    </script>
 </body>
 </html>
