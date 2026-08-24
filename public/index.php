@@ -30,64 +30,72 @@ if (isset($_GET['timeout'])) {
 
 // Handle login form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = sanitize_input($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    // Rate limiting check - 10 attempts per minute per IP
+    $rate_limit = check_rate_limit('login', 10, 60);
 
-    if (empty($username) || empty($password)) {
-        $error = 'Please enter both username and password.';
+    if (!$rate_limit['allowed']) {
+        $minutes = ceil($rate_limit['remaining_seconds'] / 60);
+        $error = "Too many login attempts. Please try again in $minutes minute(s).";
     } else {
-        // Check if account is locked
-        if (check_account_locked($username)) {
-            $error = 'Account is locked due to multiple failed login attempts. Please try again in 1 hour.';
-            log_security_event('login_attempt_locked', "Login attempt on locked account: $username", null);
+        $username = sanitize_input($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (empty($username) || empty($password)) {
+            $error = 'Please enter both username and password.';
         } else {
-            // Get user from database (using prepared statement - SQL Injection Prevention)
-            $user = get_user_by_username($username);
-
-            if ($user && verify_password($password, $user['password_hash'])) {
-                // Password correct - reset failed attempts
-                reset_failed_attempts($username);
-
-                // Check if MFA is enabled
-                if ($user['mfa_enabled']) {
-                    // Store temporary user info for MFA verification
-                    $_SESSION['mfa_user_id'] = $user['user_id'];
-                    $_SESSION['mfa_username'] = $user['username'];
-
-                    log_security_event('login_mfa_required', "Login successful, MFA verification required: $username", $user['user_id']);
-
-                    header('Location: verify_mfa.php');
-                    exit;
-                } else {
-                    // No MFA - login directly
-                    // Regenerate session ID to prevent session fixation attacks
-                    session_regenerate_id(true);
-
-                    $_SESSION['user_id'] = $user['user_id'];
-                    $_SESSION['username'] = $user['username'];
-                    $_SESSION['role'] = $user['role'];
-                    $_SESSION['initiated'] = true;
-
-                    // Store session in database
-                    store_session($user['user_id']);
-
-                    // Update last login
-                    $stmt = $pdo->prepare("UPDATE users SET last_login = NOW(), last_ip = ? WHERE user_id = ?");
-                    $stmt->execute([get_client_ip(), $user['user_id']]);
-
-                    log_security_event('login_success', "Successful login: $username", $user['user_id']);
-
-                    header('Location: dashboard.php');
-                    exit;
-                }
+            // Check if account is locked
+            if (check_account_locked($username)) {
+                $error = 'Account is locked due to multiple failed login attempts. Please try again in 1 hour.';
+                log_security_event('login_attempt_locked', "Login attempt on locked account: $username", null);
             } else {
-                // Invalid credentials
-                if ($user) {
-                    increment_failed_attempts($username);
-                }
+                // Get user from database (using prepared statement - SQL Injection Prevention)
+                $user = get_user_by_username($username);
 
-                $error = 'Invalid username or password.';
-                log_security_event('login_failed', "Failed login attempt for username: $username", null);
+                if ($user && verify_password($password, $user['password_hash'])) {
+                    // Password correct - reset failed attempts
+                    reset_failed_attempts($username);
+
+                    // Check if MFA is enabled
+                    if ($user['mfa_enabled']) {
+                        // Store temporary user info for MFA verification
+                        $_SESSION['mfa_user_id'] = $user['user_id'];
+                        $_SESSION['mfa_username'] = $user['username'];
+
+                        log_security_event('login_mfa_required', "Login successful, MFA verification required: $username", $user['user_id']);
+
+                        header('Location: verify_mfa.php');
+                        exit;
+                    } else {
+                        // No MFA - login directly
+                        // Regenerate session ID to prevent session fixation attacks
+                        session_regenerate_id(true);
+
+                        $_SESSION['user_id'] = $user['user_id'];
+                        $_SESSION['username'] = $user['username'];
+                        $_SESSION['role'] = $user['role'];
+                        $_SESSION['initiated'] = true;
+
+                        // Store session in database
+                        store_session($user['user_id']);
+
+                        // Update last login
+                        $stmt = $pdo->prepare("UPDATE users SET last_login = NOW(), last_ip = ? WHERE user_id = ?");
+                        $stmt->execute([get_client_ip(), $user['user_id']]);
+
+                        log_security_event('login_success', "Successful login: $username", $user['user_id']);
+
+                        header('Location: dashboard.php');
+                        exit;
+                    }
+                } else {
+                    // Invalid credentials
+                    if ($user) {
+                        increment_failed_attempts($username);
+                    }
+
+                    $error = 'Invalid username or password.';
+                    log_security_event('login_failed', "Failed login attempt for username: $username", null);
+                }
             }
         }
     }

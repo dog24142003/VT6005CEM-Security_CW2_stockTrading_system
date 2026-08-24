@@ -220,6 +220,85 @@ function reset_failed_attempts($username) {
 }
 
 /**
+ * Security Feature 11: Rate Limiting
+ * Prevents brute-force attacks by limiting requests per IP address
+ */
+function check_rate_limit($endpoint, $max_attempts = 10, $time_window = 60) {
+    global $pdo;
+
+    $ip_address = get_client_ip();
+
+    // Clean up old records (older than time window)
+    $cleanup_time = date('Y-m-d H:i:s', time() - $time_window);
+    $stmt = $pdo->prepare("DELETE FROM rate_limits WHERE endpoint = ? AND last_attempt < ?");
+    $stmt->execute([$endpoint, $cleanup_time]);
+
+    // Check if IP is currently blocked
+    $stmt = $pdo->prepare("SELECT blocked_until FROM rate_limits WHERE ip_address = ? AND endpoint = ? AND blocked_until > NOW()");
+    $stmt->execute([$ip_address, $endpoint]);
+    $blocked = $stmt->fetch();
+
+    if ($blocked) {
+        $blocked_until = strtotime($blocked['blocked_until']);
+        $remaining = $blocked_until - time();
+        log_security_event('rate_limit_blocked', "Rate limit blocked for endpoint: $endpoint (IP: $ip_address)", null);
+        return [
+            'allowed' => false,
+            'blocked_until' => $blocked['blocked_until'],
+            'remaining_seconds' => $remaining
+        ];
+    }
+
+    // Check current attempts in time window
+    $stmt = $pdo->prepare("SELECT attempts, first_attempt FROM rate_limits WHERE ip_address = ? AND endpoint = ? AND last_attempt >= ?");
+    $stmt->execute([$ip_address, $endpoint, $cleanup_time]);
+    $record = $stmt->fetch();
+
+    if ($record) {
+        $attempts = $record['attempts'] + 1;
+
+        if ($attempts > $max_attempts) {
+            // Block this IP for 15 minutes
+            $blocked_until = date('Y-m-d H:i:s', time() + 900); // 15 minutes
+            $stmt = $pdo->prepare("UPDATE rate_limits SET attempts = ?, blocked_until = ?, last_attempt = NOW() WHERE ip_address = ? AND endpoint = ?");
+            $stmt->execute([$attempts, $blocked_until, $ip_address, $endpoint]);
+
+            log_security_event('rate_limit_exceeded', "Rate limit exceeded for endpoint: $endpoint (IP: $ip_address, Attempts: $attempts)", null);
+
+            return [
+                'allowed' => false,
+                'blocked_until' => $blocked_until,
+                'remaining_seconds' => 900
+            ];
+        } else {
+            // Increment attempts
+            $stmt = $pdo->prepare("UPDATE rate_limits SET attempts = ?, last_attempt = NOW() WHERE ip_address = ? AND endpoint = ?");
+            $stmt->execute([$attempts, $ip_address, $endpoint]);
+        }
+    } else {
+        // First attempt in time window
+        $stmt = $pdo->prepare("INSERT INTO rate_limits (ip_address, endpoint, attempts, first_attempt, last_attempt) VALUES (?, ?, 1, NOW(), NOW())");
+        $stmt->execute([$ip_address, $endpoint]);
+    }
+
+    return [
+        'allowed' => true,
+        'attempts' => $record ? $attempts : 1,
+        'max_attempts' => $max_attempts
+    ];
+}
+
+function get_client_ip() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    }
+}
+
+/**
  * Security Feature 8: Role-Based Access Control
  */
 function check_login() {
