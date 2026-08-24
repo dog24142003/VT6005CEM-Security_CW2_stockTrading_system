@@ -208,6 +208,7 @@ CREATE VIEW v_user_portfolio_summary AS
 SELECT
     up.user_id,
     u.username,
+    s.stock_id,
     s.symbol,
     s.company_name,
     up.quantity,
