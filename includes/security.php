@@ -4,10 +4,7 @@
  * VT6005CEM CW2 - Stock Trading System
  */
 
-/**
- * Security Feature 1: Password Hashing
- * Uses bcrypt algorithm (PASSWORD_BCRYPT)
- */
+// Password hashing with bcrypt
 function hash_password($password) {
     return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
 }
@@ -16,9 +13,7 @@ function verify_password($password, $hash) {
     return password_verify($password, $hash);
 }
 
-/**
- * Security Feature 2: CSRF Token Generation and Validation
- */
+// CSRF token functions
 function generate_csrf_token() {
     global $pdo;
 
@@ -26,23 +21,23 @@ function generate_csrf_token() {
         return null;
     }
 
-    // If token already exists in session and not expired, reuse it
+    // reuse existing token if still valid
     if (isset($_SESSION['csrf_token']) && isset($_SESSION['csrf_token_time'])) {
         if (time() - $_SESSION['csrf_token_time'] < 3600) {
             return $_SESSION['csrf_token'];
         }
     }
 
-    // Generate random token
+    // create new token
     $token = bin2hex(random_bytes(32));
     $user_id = $_SESSION['user_id'];
-    $expires_at = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+    $expires_at = date('Y-m-d H:i:s', time() + 3600);
 
-    // Store in database
+    // save to database
     $stmt = $pdo->prepare("INSERT INTO csrf_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
     $stmt->execute([$user_id, $token, $expires_at]);
 
-    // Store in session
+    // save to session as well
     $_SESSION['csrf_token'] = $token;
     $_SESSION['csrf_token_time'] = time();
 
@@ -56,30 +51,26 @@ function verify_csrf_token($token) {
         return false;
     }
 
-    // Check session token first (faster)
+    // check session first
     if ($token !== $_SESSION['csrf_token']) {
         return false;
     }
 
-    // Verify in database
+    // then check database
     $stmt = $pdo->prepare("SELECT token FROM csrf_tokens WHERE user_id = ? AND token = ? AND expires_at > NOW()");
     $stmt->execute([$_SESSION['user_id'], $token]);
 
     return $stmt->rowCount() > 0;
 }
 
-/**
- * Security Feature 3: XSS Prevention - Output Encoding
- */
+// XSS prevention - escape HTML output
 function escape_html($string) {
     return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Security Feature 4: Input Validation
- */
+// Input validation functions
 function validate_username($username) {
-    // Only alphanumeric and underscore, 3-50 characters
+    // alphanumeric and underscore only, 3-50 chars
     return preg_match('/^[a-zA-Z0-9_]{3,50}$/', $username);
 }
 
@@ -88,7 +79,7 @@ function validate_email($email) {
 }
 
 function validate_password($password) {
-    // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+    // min 8 chars, must have uppercase, lowercase, number and special char
     return preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $password);
 }
 
