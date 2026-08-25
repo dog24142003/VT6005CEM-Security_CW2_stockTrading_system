@@ -2,20 +2,16 @@
 /**
  * MFA Verification Page
  * VT6005CEM CW2 - Stock Trading System
- * Security Feature: Multi-Factor Authentication (TOTP)
  */
 
 require_once '../includes/config.php';
 require_once '../includes/security.php';
 require_once '../includes/mfa.php';
 
-// Set security headers
 set_security_headers();
-
-// Start secure session
 start_secure_session();
 
-// Check if MFA is required
+// check if MFA verification is needed
 if (!isset($_SESSION['mfa_user_id'])) {
     header('Location: index.php');
     exit;
@@ -23,7 +19,7 @@ if (!isset($_SESSION['mfa_user_id'])) {
 
 $error = '';
 
-// Handle MFA verification
+// handle MFA code verification
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = sanitize_input($_POST['code'] ?? '');
 
@@ -36,10 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $secret = get_mfa_secret($user_id);
 
         if (verify_mfa_code($secret, $code)) {
-            // MFA verification successful
+            // code is correct
             $user = get_user_by_id($user_id);
 
-            // Regenerate session ID to prevent session fixation attacks
+            // regenerate session ID to prevent session fixation
             session_regenerate_id(true);
 
             $_SESSION['user_id'] = $user['user_id'];
@@ -47,14 +43,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['role'] = $user['role'];
             $_SESSION['initiated'] = true;
 
-            // Clear MFA temporary session
+            // clear temporary MFA session data
             unset($_SESSION['mfa_user_id']);
             unset($_SESSION['mfa_username']);
 
-            // Store session in database
+            // save session to database
             store_session($user['user_id']);
 
-            // Update last login
+            // update last login time
             $stmt = $pdo->prepare("UPDATE users SET last_login = NOW(), last_ip = ? WHERE user_id = ?");
             $stmt->execute([get_client_ip(), $user['user_id']]);
 

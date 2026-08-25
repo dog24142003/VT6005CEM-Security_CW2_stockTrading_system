@@ -2,19 +2,15 @@
 /**
  * Login Page
  * VT6005CEM CW2 - Stock Trading System
- * Security Features: CSRF Protection, Account Lockout, Security Logging, Prepared Statements
  */
 
 require_once '../includes/config.php';
 require_once '../includes/security.php';
 
-// Set security headers
 set_security_headers();
-
-// Start secure session
 start_secure_session();
 
-// Redirect if already logged in
+// redirect if already logged in
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
     exit;
@@ -23,14 +19,14 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 
-// Check for timeout message
+// check for session timeout
 if (isset($_GET['timeout'])) {
     $error = 'Your session has expired. Please login again.';
 }
 
-// Handle login form submission
+// handle login
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Rate limiting check - 10 attempts per minute per IP
+    // rate limiting check
     $rate_limit = check_rate_limit('login', 10, 60);
 
     if (!$rate_limit['allowed']) {
@@ -43,21 +39,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($username) || empty($password)) {
             $error = 'Please enter both username and password.';
         } else {
-            // Check if account is locked
+            // check if account is locked
             if (check_account_locked($username)) {
                 $error = 'Account is locked due to multiple failed login attempts. Please try again in 1 hour.';
                 log_security_event('login_attempt_locked', "Login attempt on locked account: $username", null);
             } else {
-                // Get user from database (using prepared statement - SQL Injection Prevention)
+                // get user from database (prepared statement prevents SQL injection)
                 $user = get_user_by_username($username);
 
                 if ($user && verify_password($password, $user['password_hash'])) {
-                    // Password correct - reset failed attempts
+                    // correct password
                     reset_failed_attempts($username);
 
-                    // Check if MFA is enabled
+                    // check if MFA is enabled
                     if ($user['mfa_enabled']) {
-                        // Store temporary user info for MFA verification
+                        // need to verify MFA code first
                         $_SESSION['mfa_user_id'] = $user['user_id'];
                         $_SESSION['mfa_username'] = $user['username'];
 
@@ -66,8 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         header('Location: verify_mfa.php');
                         exit;
                     } else {
-                        // No MFA - login directly
-                        // Regenerate session ID to prevent session fixation attacks
+                        // no MFA, login directly
+                        // regenerate session ID to prevent session fixation
                         session_regenerate_id(true);
 
                         $_SESSION['user_id'] = $user['user_id'];

@@ -89,26 +89,24 @@ function sanitize_input($data) {
     return $data;
 }
 
-/**
- * Security Feature 5: Session Management
- */
+// Session management
 function start_secure_session() {
-    // Secure session configuration
+    // set secure session settings
     ini_set('session.cookie_httponly', 1);
-    ini_set('session.cookie_secure', 1);  // Requires HTTPS
+    ini_set('session.cookie_secure', 1);
     ini_set('session.cookie_samesite', 'Strict');
     ini_set('session.use_only_cookies', 1);
     ini_set('session.use_strict_mode', 1);
 
     session_start();
 
-    // Regenerate session ID to prevent fixation
+    // regenerate ID on first access to prevent session fixation
     if (!isset($_SESSION['initiated'])) {
         session_regenerate_id(true);
         $_SESSION['initiated'] = true;
     }
 
-    // Check session timeout
+    // check if session has expired
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > SESSION_LIFETIME)) {
         destroy_session();
         header('Location: login.php?timeout=1');
@@ -121,13 +119,13 @@ function start_secure_session() {
 function destroy_session() {
     global $pdo;
 
-    // Delete from database
+    // remove session from database
     if (isset($_SESSION['session_db_id'])) {
         $stmt = $pdo->prepare("DELETE FROM sessions WHERE session_id = ?");
         $stmt->execute([$_SESSION['session_db_id']]);
     }
 
-    // Destroy session
+    // clear session data
     $_SESSION = array();
 
     if (ini_get("session.use_cookies")) {
@@ -141,9 +139,7 @@ function destroy_session() {
     session_destroy();
 }
 
-/**
- * Security Feature 6: Security Logging
- */
+// Security event logging
 function log_security_event($event_type, $event_description, $user_id = null) {
     global $pdo;
 
@@ -154,9 +150,7 @@ function log_security_event($event_type, $event_description, $user_id = null) {
     $stmt->execute([$user_id, $event_type, $event_description, $ip_address, $user_agent]);
 }
 
-/**
- * Security Feature 7: Account Lockout After Failed Attempts
- */
+// Account lockout functions
 function check_account_locked($username) {
     global $pdo;
 
@@ -168,12 +162,12 @@ function check_account_locked($username) {
         return false;
     }
 
-    // Check if account is locked
+    // see if account is locked
     if ($user['account_locked']) {
-        // Check if lockout time has passed
+        // check if lockout period has passed
         $lockout_time = strtotime($user['last_failed_login']) + LOCKOUT_TIME;
         if (time() > $lockout_time) {
-            // Reset lockout
+            // unlock the account
             reset_failed_attempts($username);
             return false;
         }
@@ -210,21 +204,18 @@ function reset_failed_attempts($username) {
     $stmt->execute([$username]);
 }
 
-/**
- * Security Feature 11: Rate Limiting
- * Prevents brute-force attacks by limiting requests per IP address
- */
+// Rate limiting to prevent brute force
 function check_rate_limit($endpoint, $max_attempts = 10, $time_window = 60) {
     global $pdo;
 
     $ip_address = get_client_ip();
 
-    // Clean up old records (older than time window)
+    // clean up old records
     $cleanup_time = date('Y-m-d H:i:s', time() - $time_window);
     $stmt = $pdo->prepare("DELETE FROM rate_limits WHERE endpoint = ? AND last_attempt < ?");
     $stmt->execute([$endpoint, $cleanup_time]);
 
-    // Check if IP is currently blocked
+    // check if IP is currently blocked
     $stmt = $pdo->prepare("SELECT blocked_until FROM rate_limits WHERE ip_address = ? AND endpoint = ? AND blocked_until > NOW()");
     $stmt->execute([$ip_address, $endpoint]);
     $blocked = $stmt->fetch();
@@ -240,7 +231,7 @@ function check_rate_limit($endpoint, $max_attempts = 10, $time_window = 60) {
         ];
     }
 
-    // Check current attempts in time window
+    // check how many attempts in time window
     $stmt = $pdo->prepare("SELECT attempts, first_attempt FROM rate_limits WHERE ip_address = ? AND endpoint = ? AND last_attempt >= ?");
     $stmt->execute([$ip_address, $endpoint, $cleanup_time]);
     $record = $stmt->fetch();
@@ -249,8 +240,8 @@ function check_rate_limit($endpoint, $max_attempts = 10, $time_window = 60) {
         $attempts = $record['attempts'] + 1;
 
         if ($attempts > $max_attempts) {
-            // Block this IP for 15 minutes
-            $blocked_until = date('Y-m-d H:i:s', time() + 900); // 15 minutes
+            // block IP for 15 minutes
+            $blocked_until = date('Y-m-d H:i:s', time() + 900);
             $stmt = $pdo->prepare("UPDATE rate_limits SET attempts = ?, blocked_until = ?, last_attempt = NOW() WHERE ip_address = ? AND endpoint = ?");
             $stmt->execute([$attempts, $blocked_until, $ip_address, $endpoint]);
 
@@ -262,12 +253,12 @@ function check_rate_limit($endpoint, $max_attempts = 10, $time_window = 60) {
                 'remaining_seconds' => 900
             ];
         } else {
-            // Increment attempts
+            // just increment the counter
             $stmt = $pdo->prepare("UPDATE rate_limits SET attempts = ?, last_attempt = NOW() WHERE ip_address = ? AND endpoint = ?");
             $stmt->execute([$attempts, $ip_address, $endpoint]);
         }
     } else {
-        // First attempt in time window
+        // first attempt in this time window
         $stmt = $pdo->prepare("INSERT INTO rate_limits (ip_address, endpoint, attempts, first_attempt, last_attempt) VALUES (?, ?, 1, NOW(), NOW())");
         $stmt->execute([$ip_address, $endpoint]);
     }
@@ -289,9 +280,7 @@ function get_client_ip() {
     }
 }
 
-/**
- * Security Feature 8: Role-Based Access Control
- */
+// Role-based access control
 function check_login() {
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['username'])) {
         header('Location: login.php');
@@ -307,23 +296,21 @@ function check_admin() {
     }
 }
 
-/**
- * Security Feature 9: Secure Headers
- */
+// Security headers
 function set_security_headers() {
-    // HSTS - Force HTTPS
+    // force HTTPS
     header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
 
-    // CSP - Content Security Policy (Allow Google Charts API for QR code)
+    // content security policy (allow Google Charts for QR code)
     header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://chart.googleapis.com https://api.qrserver.com;");
 
-    // X-Frame-Options - Prevent clickjacking
+    // prevent clickjacking
     header("X-Frame-Options: DENY");
 
-    // X-Content-Type-Options - Prevent MIME sniffing
+    // prevent MIME sniffing
     header("X-Content-Type-Options: nosniff");
 
-    // X-XSS-Protection
+    // XSS protection
     header("X-XSS-Protection: 1; mode=block");
 
     // Referrer-Policy

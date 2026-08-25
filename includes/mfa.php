@@ -2,7 +2,7 @@
 /**
  * Multi-Factor Authentication Functions
  * VT6005CEM CW2 - Stock Trading System
- * Uses Google Authenticator TOTP
+ * Using Google Authenticator TOTP
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -10,33 +10,25 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Sonata\GoogleAuthenticator\GoogleAuthenticator;
 use Sonata\GoogleAuthenticator\GoogleQrUrl;
 
-/**
- * Generate MFA secret for new user
- */
+// generate new MFA secret
 function generate_mfa_secret() {
     $g = new GoogleAuthenticator();
     return $g->generateSecret();
 }
 
-/**
- * Get QR code URL for Google Authenticator setup
- */
+// get QR code URL for Google Authenticator app
 function get_mfa_qr_code($username, $secret) {
     $issuer = 'Beta Investments';
     return GoogleQrUrl::generate($username, $secret, $issuer);
 }
 
-/**
- * Verify MFA code
- */
+// verify the 6-digit code
 function verify_mfa_code($secret, $code) {
     $g = new GoogleAuthenticator();
     return $g->checkCode($secret, $code);
 }
 
-/**
- * Enable MFA for user
- */
+// enable MFA for a user
 function enable_mfa($user_id, $secret) {
     global $pdo;
 
@@ -44,9 +36,7 @@ function enable_mfa($user_id, $secret) {
     return $stmt->execute([$secret, $user_id]);
 }
 
-/**
- * Disable MFA for user
- */
+// disable MFA for a user
 function disable_mfa($user_id) {
     global $pdo;
 
@@ -54,9 +44,7 @@ function disable_mfa($user_id) {
     return $stmt->execute([$user_id]);
 }
 
-/**
- * Check if user has MFA enabled
- */
+// check if user has MFA enabled
 function is_mfa_enabled($user_id) {
     global $pdo;
 
@@ -67,9 +55,7 @@ function is_mfa_enabled($user_id) {
     return $user && $user['mfa_enabled'] == 1;
 }
 
-/**
- * Get user's MFA secret
- */
+// get user's MFA secret
 function get_mfa_secret($user_id) {
     global $pdo;
 

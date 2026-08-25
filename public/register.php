@@ -2,20 +2,16 @@
 /**
  * Registration Page
  * VT6005CEM CW2 - Stock Trading System
- * Security Features: Input Validation, Password Hashing, XSS Prevention, CSRF Protection
  */
 
 require_once '../includes/config.php';
 require_once '../includes/security.php';
 require_once '../includes/functions.php';
 
-// Set security headers
 set_security_headers();
-
-// Start secure session
 start_secure_session();
 
-// Redirect if already logged in
+// redirect if already logged in
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
     exit;
@@ -24,14 +20,14 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 $success = '';
 
-// Handle registration form submission
+// handle registration
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = sanitize_input($_POST['username'] ?? '');
     $email = sanitize_input($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    // Validation
+    // validate inputs
     if (empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
         $error = 'All fields are required.';
     } elseif (!validate_username($username)) {
@@ -44,11 +40,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Passwords do not match.';
     } else {
         try {
-            // Create user (with password hashing)
+            // create user account (password will be hashed)
             $user_id = create_user($username, $email, $password, 'customer');
             $success = 'Registration successful! You can now login.';
 
-            // Clear form
+            // clear form fields
             $username = '';
             $email = '';
         } catch (Exception $e) {
